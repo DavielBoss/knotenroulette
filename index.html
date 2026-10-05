@@ -1,0 +1,468 @@
+<!DOCTYPE html>
+<html lang="de" class="dark h-full">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no, viewport-fit=cover">
+    <title>Feuerwehrknoten Roulette</title>
+    
+    <!-- iOS WebApp Meta Tags -->
+    <meta name="apple-mobile-web-app-capable" content="yes">
+    <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+    <meta name="apple-mobile-web-app-title" content="Knoten">
+    <meta name="theme-color" content="#080C14">
+
+    <!-- Tailwind CSS CDN -->
+    <script src="https://cdn.tailwindcss.com"></script>
+    <script>
+        tailwind.config = {
+            darkMode: 'class',
+            theme: {
+                extend: {
+                    colors: {
+                        fire: {
+                            500: '#ef4444',
+                            600: '#dc2626',
+                            700: '#b91c1c',
+                            800: '#991b1b',
+                        }
+                    },
+                    fontFamily: {
+                        sans: ['-apple-system', 'BlinkMacSystemFont', 'SF Pro Text', 'SF Pro Display', 'Helvetica Neue', 'Arial', 'sans-serif']
+                    }
+                }
+            }
+        }
+    </script>
+
+    <!-- FontAwesome Icons CDN -->
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
+
+    <style>
+        /* Safe Area Adjustments for iOS Notch & Home Indicator */
+        .pt-safe { padding-top: max(1.5rem, env(safe-area-inset-top)); }
+        .pb-safe { padding-bottom: max(1.5rem, env(safe-area-inset-bottom)); }
+        
+        /* Glassmorphism Styles */
+        .glass-panel {
+            background: rgba(15, 23, 42, 0.75);
+            backdrop-filter: blur(16px);
+            -webkit-backdrop-filter: blur(16px);
+            border: 1px solid rgba(255, 255, 255, 0.1);
+        }
+
+        .glass-button {
+            background: linear-gradient(135deg, rgba(220, 38, 38, 0.95), rgba(153, 27, 27, 0.95));
+            backdrop-filter: blur(8px);
+            -webkit-backdrop-filter: blur(8px);
+            box-shadow: 0 8px 25px -5px rgba(220, 38, 38, 0.5);
+            transition: all 0.2s ease;
+        }
+        
+        .glass-button:active {
+            transform: scale(0.96);
+            background: linear-gradient(135deg, rgba(239, 68, 68, 1), rgba(185, 28, 28, 1));
+        }
+
+        /* General Body Settings */
+        body {
+            touch-action: manipulation;
+            -webkit-tap-highlight-color: transparent;
+            user-select: none;
+            -webkit-user-select: none;
+            background-color: #080c14;
+            background-image: radial-gradient(at 0% 0%, rgba(220, 38, 38, 0.15) 0px, transparent 50%), 
+                              radial-gradient(at 100% 100%, rgba(30, 41, 59, 0.8) 0px, transparent 50%);
+            overflow: hidden;
+        }
+
+        /* Roulette Wheel Canvas */
+        #wheelCanvas {
+            touch-action: none;
+            transform: rotate(-90deg); /* Slice 0 starts top */
+        }
+
+        /* Pointer Animation */
+        @keyframes pulsePointer {
+            0%, 100% { filter: drop-shadow(0 2px 4px rgba(239,68,68,0.5)); transform: translateY(0); }
+            50% { filter: drop-shadow(0 6px 12px rgba(239,68,68,0.9)); transform: translateY(-3px); }
+        }
+        .pointer-animated {
+            animation: pulsePointer 2s infinite ease-in-out;
+            z-index: 20;
+        }
+    </style>
+</head>
+<body class="h-full text-slate-100 flex flex-col font-sans">
+
+    <!-- iOS Header -->
+    <header class="pt-safe px-5 pb-4 w-full flex items-center justify-between z-10 relative">
+        <div class="flex items-center gap-3">
+            <div class="w-10 h-10 rounded-xl bg-gradient-to-br from-fire-500 to-fire-700 flex items-center justify-center shadow-lg shadow-fire-600/30">
+                <i class="fa-solid fa-fire-extinguisher text-white text-lg"></i>
+            </div>
+            <div>
+                <h1 class="font-black text-lg tracking-tight text-white leading-tight">Feuerwehrknoten</h1>
+                <p class="text-[11px] text-slate-400 font-medium">Roulette nach FwDV 1</p>
+            </div>
+        </div>
+        <button id="soundToggle" onclick="toggleSound()" class="w-10 h-10 rounded-full glass-panel flex items-center justify-center text-slate-300 hover:text-white active:scale-95 transition">
+            <i id="soundIcon" class="fa-solid fa-volume-high"></i>
+        </button>
+    </header>
+
+    <!-- Main Content Area -->
+    <main class="flex-1 flex flex-col items-center justify-center relative px-4 w-full max-w-md mx-auto">
+        
+        <!-- Roulette Wheel Container -->
+        <div class="relative w-full aspect-square flex items-center justify-center mb-6">
+            
+            <!-- Glow Effect Behind Wheel -->
+            <div class="absolute inset-2 rounded-full bg-fire-600/20 blur-2xl pointer-events-none"></div>
+
+            <!-- Pointer -->
+            <div class="absolute -top-4 pointer-animated flex flex-col items-center">
+                <div class="w-8 h-8 bg-gradient-to-b from-fire-500 to-fire-700 rounded-full flex items-center justify-center shadow-lg border-2 border-white relative z-10">
+                    <i class="fa-solid fa-caret-down text-white text-lg mt-0.5"></i>
+                </div>
+            </div>
+
+            <!-- Canvas Wheel -->
+            <canvas id="wheelCanvas" class="w-full h-full rounded-full shadow-2xl border-[6px] border-slate-800/90 relative z-0"></canvas>
+            
+            <!-- Center Hub / Spin Button -->
+            <div onclick="spinWheel()" class="absolute z-10 w-16 h-16 rounded-full glass-panel border border-slate-500/30 flex items-center justify-center shadow-inner cursor-pointer active:scale-95 transition">
+                <i class="fa-solid fa-arrows-rotate text-fire-500 text-2xl"></i>
+            </div>
+        </div>
+
+        <!-- Spin Action Button -->
+        <button id="spinBtn" onclick="spinWheel()" class="w-full py-4 rounded-2xl glass-button text-white font-extrabold text-lg tracking-wider flex items-center justify-center gap-3">
+            <i class="fa-solid fa-arrows-spin"></i>
+            KNOTEN DREHEN
+        </button>
+        <p class="text-xs text-slate-500 mt-4 font-medium"><i class="fa-solid fa-circle-info mr-1"></i> Wählt zufällig einen der 10 Knoten aus</p>
+
+    </main>
+
+    <!-- Result Modal (Pops up after spin) -->
+    <div id="resultModal" class="fixed inset-0 z-40 flex items-end justify-center bg-black/60 backdrop-blur-sm opacity-0 pointer-events-none transition-opacity duration-300">
+        <div id="resultCard" class="w-full max-w-md glass-panel rounded-t-[2rem] border-t border-slate-700 p-6 pb-safe transform translate-y-full transition-transform duration-300 shadow-2xl relative">
+            
+            <!-- Close Modal -->
+            <button onclick="closeResultModal()" class="absolute top-4 right-5 w-8 h-8 rounded-full bg-slate-800/80 text-slate-400 flex items-center justify-center active:bg-slate-700 transition">
+                <i class="fa-solid fa-xmark"></i>
+            </button>
+
+            <!-- Knot Header -->
+            <div class="mb-4 pr-10">
+                <span class="inline-block px-2.5 py-0.5 rounded text-[10px] font-bold uppercase tracking-wider bg-fire-600/20 text-fire-400 border border-fire-500/20 mb-2">Ausgewählt</span>
+                <h2 id="resultTitle" class="text-2xl font-black text-white leading-tight mb-1">Knoten Name</h2>
+            </div>
+
+            <!-- FwDV 1 Info Box -->
+            <div class="bg-slate-800/50 rounded-xl p-4 border border-slate-700/50 mb-5">
+                <h3 class="text-xs font-bold text-slate-400 uppercase tracking-wide flex items-center gap-1.5 mb-1.5">
+                    <i class="fa-solid fa-book-open text-fire-500"></i> FwDV 1 / Verwendung
+                </h3>
+                <p id="resultDesc" class="text-sm text-slate-200 leading-relaxed font-medium">
+                    Kurze Erklärung zum Knoten.
+                </p>
+            </div>
+
+            <!-- Modal Action Buttons -->
+            <div class="flex flex-col gap-3">
+                <button onclick="openVideo()" class="w-full py-3.5 rounded-xl bg-gradient-to-r from-red-600 to-red-700 text-white font-bold text-base flex items-center justify-center gap-2 shadow-lg hover:brightness-110 active:scale-95 transition">
+                    <i class="fa-brands fa-youtube text-lg"></i> Erklärvideo ansehen
+                </button>
+                <button onclick="closeResultModal(); setTimeout(spinWheel, 300);" class="w-full py-3.5 rounded-xl bg-slate-800 text-slate-300 font-bold text-sm flex items-center justify-center gap-2 border border-slate-700 active:bg-slate-700 transition">
+                    <i class="fa-solid fa-rotate-right"></i> Neu drehen
+                </button>
+            </div>
+        </div>
+    </div>
+
+    <!-- YouTube Video Player Modal -->
+    <div id="videoModal" class="fixed inset-0 z-50 flex items-center justify-center bg-black/95 opacity-0 pointer-events-none transition-opacity duration-300">
+        <div class="w-full max-w-3xl flex flex-col items-center">
+            
+            <!-- Video Navigation Header -->
+            <div class="w-full flex justify-between items-center px-4 py-3 mb-2 pt-safe">
+                <div class="flex items-center gap-2 text-white font-bold text-sm">
+                    <i class="fa-brands fa-youtube text-red-500 text-xl"></i>
+                    <span id="videoTitle" class="truncate max-w-[200px] sm:max-w-md">Video Titel</span>
+                </div>
+                <button onclick="closeVideo()" class="w-10 h-10 rounded-full bg-slate-800 text-slate-300 flex items-center justify-center active:scale-90 transition">
+                    <i class="fa-solid fa-xmark text-lg"></i>
+                </button>
+            </div>
+
+            <!-- Video Player -->
+            <div class="w-full aspect-video bg-black rounded-lg sm:rounded-2xl overflow-hidden shadow-2xl border-y sm:border border-slate-800">
+                <iframe id="youtubeIframe" class="w-full h-full border-0" allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture" allowfullscreen></iframe>
+            </div>
+            
+            <p class="text-xs text-slate-500 mt-4 px-4 text-center">Video lädt von YouTube (Feuerwehr Lernbar / FeuerwehrWilli)</p>
+        </div>
+    </div>
+
+    <script>
+        // Exakte Liste der 10 angeforderten Knoten
+        const knots = [
+            { id: 1, title: 'Mastwurf gestochen', video: '_8CKJrBWJTM', desc: 'Zum Befestigen einer Leine an einem Objekt (z.B. Pfahl) oder zum Anschlagen von Geräten. Muss immer mit einem Halbschlag gesichert werden.' },
+            { id: 2, title: 'Mastwurf gelegt', video: 'gqkZywQvbWg', desc: 'Zum Anschlagen an offenen Enden (z.B. Saugkorb). Zwei gegengleiche Augen werden übereinander gelegt und mit Halbschlag gesichert.' },
+            { id: 3, title: 'Doppelschlinge gestochen', video: 'jlU_oSqqhgM', desc: 'Doppelte Schlinge zur Gerätesicherung oder Menschenrettung. Wird direkt um das Objekt oder die Person gestochen.' },
+            { id: 4, title: 'Doppelschlinge gelegt', video: 'jlU_oSqqhgM', desc: 'Wird gelegt, um über ein freies Ende gestülpt zu werden. Dient dem sicheren Halten und Sichern.' },
+            { id: 5, title: 'Zimmermannsschlag', video: 'jlU_oSqqhgM', desc: 'Befestigungsknoten zum Hochziehen von schweren Geräten (z.B. Saugkorb, Strahlrohr). Zieht sich bei Belastung selbstständig fest.' },
+            { id: 6, title: 'Schotenstich m. Aufziehschlaufe', video: 'jlU_oSqqhgM', desc: 'Zum Verbinden zweier ungleich dicker Leinen. Die Aufziehschlaufe ermöglicht ein schnelles Lösen auch nach starker Belastung.' },
+            { id: 7, title: 'Schotenstich o. Aufziehschlaufe', video: 'jlU_oSqqhgM', desc: 'Zum dauerhaften Verbinden zweier ungleich dicker Leinen. Sehr sicher, lässt sich nach Belastung aber schwerer lösen.' },
+            { id: 8, title: 'Brustbund', video: '8PZoAhc9hFw', desc: 'Rettungsbund zur Menschenrettung. Besteht aus dem eigentlichen Brustbund, fixiert mit Pfahlstich und gesichert mit Spierenstich.' },
+            { id: 9, title: 'Achterknoten', video: 'fJ8DBdMO8mE', desc: 'Sicherheitsknoten zur Schlaufenbildung (z.B. Einbinden oder Einhängen in Karabiner). Sehr knotenfest und leicht zu kontrollieren.' },
+            { id: 10, title: 'Halbmastwurf', video: 'uN95KVRYFkU', desc: 'Der Halbmastwurf (HMS) dient zum dynamischen Sichern und kontrollierten Ablassen von Personen mittels Feuerwehrleine und HMS-Karabiner.' }
+        ];
+
+        // State variables
+        let soundEnabled = true;
+        let activeKnot = null;
+        let isSpinning = false;
+        
+        // Canvas & Physics
+        const canvas = document.getElementById('wheelCanvas');
+        const ctx = canvas.getContext('2d');
+        let currentAngle = 0;
+        let spinVelocity = 0;
+        let lastTickSlice = -1;
+
+        // Audio Context (Synthesized tick sound)
+        let audioCtx = null;
+
+        function initCanvas() {
+            const dpr = window.devicePixelRatio || 1;
+            const rect = canvas.parentElement.getBoundingClientRect();
+            canvas.width = rect.width * dpr;
+            canvas.height = rect.height * dpr;
+            ctx.scale(dpr, dpr);
+            drawWheel();
+        }
+
+        function drawWheel() {
+            const width = canvas.width / (window.devicePixelRatio || 1);
+            const height = canvas.height / (window.devicePixelRatio || 1);
+            const centerX = width / 2;
+            const centerY = height / 2;
+            const radius = Math.min(centerX, centerY) - 2;
+            
+            const numSlices = knots.length;
+            const sliceAngle = (Math.PI * 2) / numSlices;
+
+            ctx.clearRect(0, 0, width, height);
+            ctx.save();
+            ctx.translate(centerX, centerY);
+            ctx.rotate(currentAngle);
+
+            for (let i = 0; i < numSlices; i++) {
+                const startAngle = i * sliceAngle;
+                const endAngle = startAngle + sliceAngle;
+
+                // Alternate slice colors (Red / Dark Slate)
+                ctx.beginPath();
+                ctx.moveTo(0, 0);
+                ctx.arc(0, 0, radius, startAngle, endAngle);
+                ctx.closePath();
+                ctx.fillStyle = i % 2 === 0 ? '#dc2626' : '#1e293b'; 
+                ctx.fill();
+                
+                ctx.lineWidth = 1.5;
+                ctx.strokeStyle = 'rgba(15, 23, 42, 0.5)';
+                ctx.stroke();
+
+                // Draw Text
+                ctx.save();
+                ctx.rotate(startAngle + sliceAngle / 2);
+                ctx.textAlign = 'right';
+                ctx.textBaseline = 'middle';
+                ctx.fillStyle = '#ffffff';
+                ctx.font = 'bold 12px -apple-system, sans-serif';
+                ctx.shadowColor = 'rgba(0,0,0,0.8)';
+                ctx.shadowBlur = 3;
+                
+                let text = knots[i].title;
+                if(text.length > 21) text = text.substring(0, 19) + '...';
+                
+                ctx.fillText(text, radius - 15, 0);
+                ctx.restore();
+            }
+            ctx.restore();
+        }
+
+        function initAudio() {
+            if (!audioCtx) {
+                const AudioContext = window.AudioContext || window.webkitAudioContext;
+                if (AudioContext) audioCtx = new AudioContext();
+            }
+            if (audioCtx && audioCtx.state === 'suspended') {
+                audioCtx.resume();
+            }
+        }
+
+        function playTick() {
+            if (!soundEnabled) return;
+            try {
+                initAudio();
+                if (!audioCtx) return;
+                const osc = audioCtx.createOscillator();
+                const gain = audioCtx.createGain();
+                osc.type = 'triangle';
+                osc.frequency.setValueAtTime(600, audioCtx.currentTime);
+                osc.frequency.exponentialRampToValueAtTime(100, audioCtx.currentTime + 0.05);
+                gain.gain.setValueAtTime(0.1, audioCtx.currentTime);
+                gain.gain.exponentialRampToValueAtTime(0.001, audioCtx.currentTime + 0.05);
+                osc.connect(gain);
+                gain.connect(audioCtx.destination);
+                osc.start();
+                osc.stop(audioCtx.currentTime + 0.05);
+                
+                if(navigator.vibrate) navigator.vibrate(5);
+            } catch (e) {}
+        }
+
+        function playWinSound() {
+            if (!soundEnabled) return;
+            try {
+                initAudio();
+                const gain = audioCtx.createGain();
+                gain.gain.value = 0.2;
+                gain.connect(audioCtx.destination);
+                
+                [392.00, 523.25, 659.25].forEach((freq, i) => {
+                    const osc = audioCtx.createOscillator();
+                    osc.type = 'sine';
+                    osc.frequency.value = freq;
+                    osc.connect(gain);
+                    osc.start(audioCtx.currentTime + i * 0.1);
+                    osc.stop(audioCtx.currentTime + i * 0.1 + 0.3);
+                });
+                
+                if(navigator.vibrate) navigator.vibrate([30, 50, 30]);
+            } catch(e) {}
+        }
+
+        function animateWheel() {
+            if (!isSpinning) return;
+
+            currentAngle += spinVelocity;
+            spinVelocity *= 0.985; // Friction
+
+            const numSlices = knots.length;
+            const sliceAngle = (Math.PI * 2) / numSlices;
+            let normalizedAngle = ((Math.PI * 2) - (currentAngle % (Math.PI * 2))) % (Math.PI * 2);
+            let currentSlice = Math.floor(normalizedAngle / sliceAngle);
+            
+            if (currentSlice !== lastTickSlice) {
+                playTick();
+                lastTickSlice = currentSlice;
+            }
+
+            drawWheel();
+
+            if (spinVelocity < 0.002) {
+                isSpinning = false;
+                spinVelocity = 0;
+                finishSpin(currentSlice);
+            } else {
+                requestAnimationFrame(animateWheel);
+            }
+        }
+
+        function spinWheel() {
+            if (isSpinning) return;
+            
+            initAudio();
+            const spinBtn = document.getElementById('spinBtn');
+            const icon = spinBtn.querySelector('i');
+            icon.classList.add('animate-spin');
+            
+            isSpinning = true;
+            spinVelocity = 0.4 + Math.random() * 0.2; 
+            
+            requestAnimationFrame(animateWheel);
+        }
+
+        function finishSpin(winningIndex) {
+            const spinBtn = document.getElementById('spinBtn');
+            const icon = spinBtn.querySelector('i');
+            icon.classList.remove('animate-spin');
+            
+            activeKnot = knots[winningIndex];
+            playWinSound();
+            showResultModal();
+        }
+
+        function showResultModal() {
+            if (!activeKnot) return;
+            
+            document.getElementById('resultTitle').textContent = activeKnot.title;
+            document.getElementById('resultDesc').textContent = activeKnot.desc;
+            
+            const modal = document.getElementById('resultModal');
+            const card = document.getElementById('resultCard');
+            
+            modal.classList.remove('pointer-events-none');
+            modal.classList.replace('opacity-0', 'opacity-100');
+            card.classList.replace('translate-y-full', 'translate-y-0');
+        }
+
+        function closeResultModal() {
+            const modal = document.getElementById('resultModal');
+            const card = document.getElementById('resultCard');
+            
+            card.classList.replace('translate-y-0', 'translate-y-full');
+            modal.classList.replace('opacity-100', 'opacity-0');
+            setTimeout(() => modal.classList.add('pointer-events-none'), 300);
+        }
+
+        function openVideo() {
+            if (!activeKnot) return;
+            
+            document.getElementById('videoTitle').textContent = activeKnot.title;
+            const iframe = document.getElementById('youtubeIframe');
+            iframe.src = `https://www.youtube-nocookie.com/embed/${activeKnot.video}?autoplay=1&rel=0&modestbranding=1`;
+            
+            const modal = document.getElementById('videoModal');
+            modal.classList.remove('pointer-events-none');
+            modal.classList.replace('opacity-0', 'opacity-100');
+        }
+
+        function closeVideo() {
+            const modal = document.getElementById('videoModal');
+            const iframe = document.getElementById('youtubeIframe');
+            
+            modal.classList.replace('opacity-100', 'opacity-0');
+            setTimeout(() => {
+                modal.classList.add('pointer-events-none');
+                iframe.src = ''; 
+            }, 300);
+        }
+
+        function toggleSound() {
+            soundEnabled = !soundEnabled;
+            const icon = document.getElementById('soundIcon');
+            const btn = document.getElementById('soundToggle');
+            if (soundEnabled) {
+                icon.className = 'fa-solid fa-volume-high';
+                btn.classList.remove('opacity-50');
+            } else {
+                icon.className = 'fa-solid fa-volume-xmark text-slate-500';
+                btn.classList.add('opacity-50');
+            }
+        }
+
+        window.addEventListener('load', () => {
+            setTimeout(initCanvas, 100);
+        });
+        
+        window.addEventListener('resize', () => {
+            if(!isSpinning) initCanvas();
+        });
+    </script>
+</body>
+</html>
